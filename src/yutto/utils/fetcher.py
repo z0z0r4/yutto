@@ -203,6 +203,9 @@ class Fetcher:
     @MaxRetry(2)
     async def get_size(ctx: FetcherContext, client: AsyncClient, url: str) -> int | None:
         async with ctx.fetch_guard():
+            if "platform=android_tv_yst" in url:
+                client.headers.pop("referer", None)
+                headers={"User-Agent": "Bilibili Freedoooooom/MarkII"}
             headers = client.headers.copy()
             headers["Range"] = "bytes=0-1"
             resp = await client.get(

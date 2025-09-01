@@ -14,8 +14,10 @@ from yutto.api.ugc_video import (
     UgcVideoListItem,
     get_ugc_video_chapters,
     get_ugc_video_playurl,
+    get_ugc_video_tv_leak_4k_playurl,
     get_ugc_video_subtitles,
 )
+from yutto.validator import validate_user_info
 from yutto.exceptions import (
     HttpStatusError,
     NoAccessPermissionError,
@@ -171,11 +173,19 @@ async def extract_ugc_video_data(
         cid = ugc_video_info["cid"]
         name = ugc_video_info["name"]
         id = ugc_video_info["id"]
-        videos, audios = (
-            await get_ugc_video_playurl(ctx, client, avid, cid)
-            if options["require_video"] or options["require_audio"]
-            else ([], [])
-        )
+        # if vip use get_ugc_video_playurl else get_ugc_video_tv_leak_4k_playurl
+        if await validate_user_info(ctx, {"is_login": True, "vip_status": True}):
+            videos, audios = (
+                await get_ugc_video_playurl(ctx, client, avid, cid)
+                if options["require_video"] or options["require_audio"]
+                else ([], [])
+            )
+        else:
+            videos, audios = (
+                await get_ugc_video_tv_leak_4k_playurl(ctx, client, avid, cid)
+                if options["require_video"] or options["require_audio"]
+                else ([], [])
+            )
         subtitles = await get_ugc_video_subtitles(ctx, client, avid, cid) if options["require_subtitle"] else []
         chapter_info_data = (
             await get_ugc_video_chapters(ctx, client, avid, cid) if options["require_chapter_info"] else []

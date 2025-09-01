@@ -105,6 +105,18 @@ audio_quality_map = {
         "description": "64kbps",
         "bitrate": 64,
     },
+    30257: {
+        "description": "45kbps",
+        "bitrate": 45,
+    },
+    30259: {
+        "description": "103kbps",
+        "bitrate": 103,
+    },
+    30260: {
+        "description": "190kbps",
+        "bitrate": 190,
+    },
     0: {
         "description": "Unknown",
         "bitrate": 0,

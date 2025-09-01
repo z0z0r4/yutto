@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import time
+import urllib.parse
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from yutto.exceptions import (
@@ -25,6 +27,7 @@ from yutto.utils.fetcher import Fetcher, FetcherContext
 from yutto.utils.functional.data_access import data_has_chained_keys
 from yutto.utils.metadata import Actor, ChapterInfoData, MetaData
 from yutto.utils.time import get_time_stamp_by_now
+from yutto.utils.app_auth import appsign
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
@@ -167,6 +170,107 @@ async def get_ugc_video_list(ctx: FetcherContext, client: AsyncClient, avid: AvI
         )
     ]
     return result
+
+
+async def get_ugc_video_tv_leak_4k_playurl(
+    ctx: FetcherContext, client: AsyncClient, avid: AvId, cid: CId
+) -> tuple[list[VideoUrlMeta], list[AudioUrlMeta]]:
+    # 4048 = 16(useDash) | 64(useHDR) | 128(use4K) | 256(useDolby) | 512(useXXX) | 1024(use8K) | 2048(useAV1)
+    params: dict[str, str] = {
+        "build": "108000",
+        "cid": cid.__str__(),
+        "fnval": "4048",
+        "fnver": "0",
+        "fourk": "1",
+        "mobi_app": "android_tv_yst",
+        "object_id": avid.__str__(),
+        "playurl_type": "1",
+        "preview": "1",
+        "qn": "127",
+        "source_type": "3",
+        "ts": str(int(time.time())),
+        "uid": "0",
+    }
+
+    extra_headers: dict[str, str] = {
+        "buvid": "X",
+    }
+
+    client.headers.update(extra_headers)
+
+    signed_params = appsign(params)
+
+    query = urllib.parse.urlencode(signed_params)
+
+    play_api = f"https://api.snm0516.aisee.tv/x/tv/playurl?{query}"
+
+    resp_json = await Fetcher.fetch_json(ctx, client, play_api)
+    if resp_json is None:
+        raise NoAccessPermissionError(f"无法获取该视频链接（{format_ids(avid, cid)}）")
+    if resp_json.get("data") is None:
+        raise NoAccessPermissionError(
+            f"无法获取该视频链接（{format_ids(avid, cid)}），原因：{resp_json.get('message')}"
+        )
+    if resp_json["data"].get("dash") is None:
+        raise UnSupportedTypeError(f"该视频（{format_ids(avid, cid)}）尚不支持 DASH 格式")
+    videos: list[VideoUrlMeta] = (
+        [
+            {
+                "url": video["base_url"],
+                "mirrors": video["backup_url"] if video["backup_url"] is not None else [],
+                "codec": video_codec_map[video["codecid"]],
+                "width": video["width"],
+                "height": video["height"],
+                "quality": video["id"],
+            }
+            for video in resp_json["data"]["dash"]["video"]
+        ]
+        if resp_json["data"]["dash"]["video"]
+        else []
+    )
+
+    audios: list[AudioUrlMeta] = (
+        [
+            {
+                "url": audio["base_url"],
+                "mirrors": audio["backup_url"] if audio["backup_url"] is not None else [],
+                "codec": audio["codecs"],
+                "width": 0,
+                "height": 0,
+                "quality": audio["id"],
+            }
+            for audio in resp_json["data"]["dash"]["audio"]
+        ]
+        if resp_json["data"]["dash"]["audio"]
+        else []
+    )
+    if resp_json["data"]["dash"]["dolby"] is not None and resp_json["data"]["dash"]["dolby"]["audio"] is not None:
+        dolby_audios_json = resp_json["data"]["dash"]["dolby"]["audio"]
+        audios.extend(
+            {
+                "url": dolby_audio_json["base_url"],
+                "mirrors": dolby_audio_json["backup_url"] if dolby_audio_json["backup_url"] is not None else [],
+                "codec": "eac3",  # TODO: 由于这里的 codecid 仍然是 0，所以无法通过 audio_codec_map 转换，暂时直接硬编码
+                "width": 0,
+                "height": 0,
+                "quality": dolby_audio_json["id"],
+            }
+            for dolby_audio_json in dolby_audios_json
+        )
+    if resp_json["data"]["dash"].get("flac") is not None and resp_json["data"]["dash"]["flac"].get("audio") is not None:
+        hi_res_audio_json = resp_json["data"]["dash"]["flac"]["audio"]
+        audios.append(
+            {
+                "url": hi_res_audio_json["base_url"],
+                "mirrors": hi_res_audio_json["backup_url"] if hi_res_audio_json["backup_url"] is not None else [],
+                "codec": "flac",  # TODO: 同上，硬编码
+                "width": 0,
+                "height": 0,
+                "quality": hi_res_audio_json["id"],
+            }
+        )
+
+    return (videos, audios)
 
 
 async def get_ugc_video_playurl(
