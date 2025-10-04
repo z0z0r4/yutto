@@ -183,7 +183,7 @@ async def get_ugc_video_tv_leak_4k_playurl(
         "fnver": "0",
         "fourk": "1",
         "mobi_app": "android_tv_yst",
-        "object_id": avid.__str__(),
+        "object_id": avid.as_aid().value,
         "playurl_type": "1",
         "preview": "1",
         "qn": "127",
@@ -228,6 +228,7 @@ async def get_ugc_video_tv_leak_4k_playurl(
         if resp_json["data"]["dash"]["video"]
         else []
     )
+    print(resp_json["data"]["dash"]["video"])
 
     audios: list[AudioUrlMeta] = (
         [
